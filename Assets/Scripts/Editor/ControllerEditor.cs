@@ -22,6 +22,12 @@ public class ControllerEditor : Editor {
             exporter.Export();
         }
 
+        if (GUILayout.Button("Export prefab"))
+        {
+            PrefabExporter exporter = new PrefabExporter();
+            exporter.Export();
+        }
+
         if (GUILayout.Button("Print all translated scripts")) {
             if (cont.romPersos?.Count>0) {
                 foreach(var romPerso in cont.romPersos) {
