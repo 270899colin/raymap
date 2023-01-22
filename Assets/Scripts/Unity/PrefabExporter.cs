@@ -46,6 +46,7 @@ public class PrefabExporter
 
         ExportMeshes(meshFilters);
         ExportMaterials(meshRenderers);
+        ExportLightingData(meshRenderers);
 
         PrefabUtility.SaveAsPrefabAsset(world, "Assets/" + exportDir + "/Prefabs/world.prefab");
         AssetDatabase.Refresh();
@@ -107,8 +108,50 @@ public class PrefabExporter
 
             mr.sharedMaterial = material;
         }
+    }
 
-        // TODO: Save MaterialPropertyBlock information.
+    /// <summary>
+    /// Export lighting data of each mesh.
+    /// Data is retrieved from the MaterialPropertyBlock of each renderer.
+    /// </summary>
+    /// <param name="renderers">MeshRenderers of all meshes in the scene.</param>
+    private void ExportLightingData(IEnumerable<Renderer> renderers)
+    {
+        List<MeshLightingData> mld = new List<MeshLightingData>();
+
+        foreach (var mr in renderers)
+        {
+            MeshLightingData data = new MeshLightingData();
+
+            data.objName = mr.gameObject.name;
+            var mpb = new MaterialPropertyBlock();
+            mr.GetPropertyBlock(mpb);
+
+            data.staticLightCount = mpb.GetFloat("_StaticLightCount");
+
+            if (data.staticLightCount > 0)
+            {
+                data.staticLightPos = new StaticLightPos();
+                data.staticLightDir = new StaticLightDir();
+                data.staticLightCol = new StaticLightCol();
+                data.staticLightParams = new StaticLightParams();
+
+                data.staticLightPos.staticLightPos = mpb.GetVectorArray("_StaticLightPos");
+                data.staticLightDir.staticLightDir = mpb.GetVectorArray("_StaticLightDir");
+                data.staticLightCol.staticLightCol = mpb.GetVectorArray("_StaticLightCol");
+                data.staticLightParams.staticLightParams = mpb.GetVectorArray("_StaticLightParams");
+            }
+
+            mld.Add(data);
+        }
+        
+        var lightingData = ScriptableObject.CreateInstance<LightingData>();
+        
+        lightingData.luminosity = Shader.GetGlobalFloat("_Luminosity");
+        lightingData.saturate = Shader.GetGlobalFloat("_Saturate");
+        lightingData.meshLightingData = mld;
+
+        AssetDatabase.CreateAsset(lightingData, "Assets/" + exportDir + "/Prefabs/" + "Lighting.asset");
     }
 
     /// <summary>
