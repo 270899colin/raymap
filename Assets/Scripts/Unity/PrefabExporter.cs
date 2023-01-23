@@ -13,7 +13,7 @@ using UnityEngine;
 /// <summary>
 /// Utility class for exporting a map to Unity prefab, along with textures and materials.
 /// </summary>
-public class PrefabExporter
+public class PrefabExporter : MonoBehaviour
 {
     // Cache saved textures (using hash) so we don't save the same texture multiple times.
     // Key is hash (gen using GetPixels), value is file name.
@@ -47,6 +47,8 @@ public class PrefabExporter
         ExportMeshes(meshFilters);
         ExportMaterials(meshRenderers);
         ExportLightingData(meshRenderers);
+
+        RemoveRaymapScripts(world);
 
         PrefabUtility.SaveAsPrefabAsset(world, "Assets/" + exportDir + "/Prefabs/world.prefab");
         AssetDatabase.Refresh();
@@ -84,9 +86,14 @@ public class PrefabExporter
             var saveName = GetMeshFriendlyName(mf.gameObject.name) + ".asset";
             AssetDatabase.CreateAsset(mesh, "Assets/" + exportDir + "/Meshes/" + saveName);
             AssetDatabase.Refresh();
-        }
 
-        // TODO: Collision
+            // Fix collision
+            var mc = mf.GetComponent<MeshCollider>();
+            if(mc != null)
+            {
+                mc.sharedMesh = mesh;
+            }
+        }
     }
 
     /// <summary>
@@ -220,16 +227,45 @@ public class PrefabExporter
     }
 
     /// <summary>
+    /// Removes Raymap scripts in all child objects.
+    /// </summary>
+    /// <param name="world">World GameObject.</param>
+    private void RemoveRaymapScripts(GameObject world)
+    {
+        // Unity heavily recommends NOT using DestroyImmediate but Destroy does not seem
+        // to persist when saving the prefab for some reason.
+        DestroyImmediate(world.GetComponent<SuperObjectComponent>());
+        DestroyImmediate(world.GetComponent<Moddable>());
+
+        RemoveComponentsInChildren<ExportableModel>(world);
+        RemoveComponentsInChildren<SuperObjectComponent>(world);
+        RemoveComponentsInChildren<Moddable>(world);
+        RemoveComponentsInChildren<SectorComponent>(world);
+        RemoveComponentsInChildren<BillboardBehaviour>(world);
+        RemoveComponentsInChildren<CollideComponent>(world);
+    }
+
+    /// <summary>
+    /// Remove all instances of a component in each child object.
+    /// </summary>
+    /// <typeparam name="T">Component to remove.</typeparam>
+    /// <param name="parent">Parent object.</param>
+    private void RemoveComponentsInChildren<T>(GameObject parent)
+    {
+        var components = parent.GetComponentsInChildren<T>();
+        foreach (var comp in components)
+        {
+            DestroyImmediate(comp as Component);
+        }
+    }
+
+    /// <summary>
     /// Shortens name of submesh object names.
-    /// Submesh @ pos moor_00|0x0007E674[0x0007E678] -> 0x0007E678
     /// </summary>
     /// <param name="objName">Name of submesh object.</param>
     /// <returns>Shortened name.</returns>
     private string GetMeshFriendlyName(string objName)
     {
-        string pattern = @"\[(.+?)\]";
-        Regex regex = new Regex(pattern);
-        var matches = regex.Match(objName);
-        return matches.Groups[1].Value;
+        return objName.Substring(objName.LastIndexOf('|') + 1);
     }
 }

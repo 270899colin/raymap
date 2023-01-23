@@ -24,8 +24,10 @@ public class ControllerEditor : Editor {
 
         if (GUILayout.Button("Export prefab"))
         {
-            PrefabExporter exporter = new PrefabExporter();
-            exporter.Export();
+            var exporter = new GameObject("Exporter");
+            var pe = exporter.AddComponent<PrefabExporter>();
+            pe.Export();
+            Destroy(exporter);
         }
 
         if (GUILayout.Button("Print all translated scripts")) {
