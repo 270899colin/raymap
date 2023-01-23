@@ -46,7 +46,7 @@ public class PrefabExporter : MonoBehaviour
 
         ExportMeshes(meshFilters);
         ExportMaterials(meshRenderers);
-        ExportLightingData(meshRenderers);
+        ExportLightingData(meshRenderers, world);
 
         RemoveRaymapScripts(world);
 
@@ -122,7 +122,7 @@ public class PrefabExporter : MonoBehaviour
     /// Data is retrieved from the MaterialPropertyBlock of each renderer.
     /// </summary>
     /// <param name="renderers">MeshRenderers of all meshes in the scene.</param>
-    private void ExportLightingData(IEnumerable<Renderer> renderers)
+    private void ExportLightingData(IEnumerable<Renderer> renderers, GameObject world)
     {
         List<MeshLightingData> mld = new List<MeshLightingData>();
 
@@ -159,6 +159,13 @@ public class PrefabExporter : MonoBehaviour
         lightingData.meshLightingData = mld;
 
         AssetDatabase.CreateAsset(lightingData, "Assets/" + exportDir + "/Prefabs/" + "Lighting.asset");
+        AssetDatabase.Refresh();
+
+        var ldo = new GameObject("LightingData");
+        ldo.transform.parent = world.transform;
+
+        var ldscript = ldo.AddComponent<RestoreLighting>();
+        ldscript.lightingData = lightingData;
     }
 
     /// <summary>
@@ -243,6 +250,10 @@ public class PrefabExporter : MonoBehaviour
         RemoveComponentsInChildren<SectorComponent>(world);
         RemoveComponentsInChildren<BillboardBehaviour>(world);
         RemoveComponentsInChildren<CollideComponent>(world);
+        RemoveComponentsInChildren<PortalBehaviour>(world);
+
+        // TODO: Investigate these later
+        RemoveComponentsInChildren<MultiTextureMaterial>(world);
     }
 
     /// <summary>
