@@ -149,6 +149,9 @@ public class PrefabExporter : MonoBehaviour
                 data.staticLightParams.staticLightParams = mpb.GetVectorArray("_StaticLightParams");
             }
 
+            data.sectorFog = mpb.GetVector("_SectorFog");
+            data.sectorFogParams = mpb.GetVector("_SectorFogParams");
+                
             mld.Add(data);
         }
         
@@ -251,6 +254,13 @@ public class PrefabExporter : MonoBehaviour
         RemoveComponentsInChildren<BillboardBehaviour>(world);
         RemoveComponentsInChildren<CollideComponent>(world);
         RemoveComponentsInChildren<PortalBehaviour>(world);
+        RemoveComponentsInChildren<PersoBehaviour>(world);
+        RemoveComponentsInChildren<BrainComponent>(world);
+        RemoveComponentsInChildren<DsgVarComponent>(world);
+        RemoveComponentsInChildren<DynamicsMechanicsComponent>(world);
+        RemoveComponentsInChildren<MindComponent>(world);
+        RemoveComponentsInChildren<CustomBitsComponent>(world);
+        RemoveComponentsInChildren<ScriptComponent>(world);
 
         // TODO: Investigate these later
         RemoveComponentsInChildren<MultiTextureMaterial>(world);

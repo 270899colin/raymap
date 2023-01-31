@@ -45,6 +45,9 @@ public class RestoreLighting : MonoBehaviour
                     mpb.SetVectorArray("_StaticLightParams", mld.staticLightParams.staticLightParams);
                 }
 
+                mpb.SetVector("_SectorFog", mld.sectorFog);
+                mpb.SetVector("_SectorFogParams", mld.sectorFogParams);
+
                 mr.SetPropertyBlock(mpb);
             } else
             {

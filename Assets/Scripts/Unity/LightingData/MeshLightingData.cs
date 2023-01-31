@@ -15,4 +15,6 @@ public class MeshLightingData
     public StaticLightDir staticLightDir;
     public StaticLightCol staticLightCol;
     public StaticLightParams staticLightParams;
+    public Vector4 sectorFog;
+    public Vector4 sectorFogParams;
 }
