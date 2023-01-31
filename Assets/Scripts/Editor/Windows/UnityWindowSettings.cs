@@ -312,6 +312,11 @@ public class UnityWindowSettings : UnityWindow {
 		UnitySettings.CreateFamilyGameObjects = EditorGUI.Toggle(GetNextRect(ref YPos), new GUIContent("Create Family GameObjects"), UnitySettings.CreateFamilyGameObjects);
 		UnitySettings.ShowCollisionDataForNoCollisionObjects = EditorGUI.Toggle(GetNextRect(ref YPos), new GUIContent("Show Collision Data For NoCollision SPOs"), UnitySettings.ShowCollisionDataForNoCollisionObjects);
 
+		// Prefab Exporter
+		DrawHeader(ref YPos, "Prefab Exporter Settings");
+		UnitySettings.ExportStaticMeshesOnly = EditorGUI.Toggle(GetNextRect(ref YPos), new GUIContent("Export static meshes only"), UnitySettings.ExportStaticMeshesOnly);
+		UnitySettings.RemoveRaymapScripts = EditorGUI.Toggle(GetNextRect(ref YPos), new GUIContent("Remove Raymap scripts"), UnitySettings.RemoveRaymapScripts);
+
 		if (EditorGUI.EndChangeCheck() || Dirty) {
 #if UNITY_EDITOR
 			UnitySettings.Save();

@@ -85,6 +85,10 @@ public class UnitySettings {
     public static string HighlightObjectsFilter { get; set; }
     public static string HighlightObjectsTextFormat { get; set; }
 
+    // Prefab Exporter
+    public static bool ExportStaticMeshesOnly { get; set; } // If set to true, only exports static meshes (terrain).
+    public static bool RemoveRaymapScripts { get; set; } // If set to true, remove Raymap scripts upon export.
+
     /// <summary>
     /// Static constructor loads in editor data at editor startup.
     /// This way, the data loads even if the editor window isn't active.
@@ -187,7 +191,9 @@ public class UnitySettings {
 		CreateFamilyGameObjects = s.SerializeBool("CreateFamilyGameObjects", CreateFamilyGameObjects);
 		ShowCollisionDataForNoCollisionObjects = s.SerializeBool("ShowCollisionDataForNoCollisionObjects", ShowCollisionDataForNoCollisionObjects);
 
-
+        // Prefab Exporter
+        ExportStaticMeshesOnly = s.SerializeBool("ExportStaticMeshesOnly", ExportStaticMeshesOnly);
+        RemoveRaymapScripts = s.SerializeBool("RemoveRaymapScripts", RemoveRaymapScripts);
 
         Settings.EngineVersion[] engines = EnumHelpers.GetValues<Settings.EngineVersion>();
         foreach (Settings.EngineVersion engine in engines) {

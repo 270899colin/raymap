@@ -1,30 +1,38 @@
-using OpenSpace;
-using OpenSpace.Object;
-using OpenSpace.Visual;
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
 /// <summary>
-/// Utility class for exporting a map to Unity prefab, along with textures and materials.
+/// Utility class for exporting a map to Unity prefab, along with textures, materials and lighting data.
 /// </summary>
 public class PrefabExporter : MonoBehaviour
 {
-    // Cache saved textures (using hash) so we don't save the same texture multiple times.
-    // Key is hash (gen using GetPixels), value is file name.
+    /// <summary>
+    /// Dictionary of object sets to export.
+    /// An object set is defined as a list of objects with the same identifier/obj name (they are duplicates).
+    /// They contain the same mesh/texture data, but may contain different lighting data (MPB).
+    /// Key is name of the original object.
+    /// </summary>
+    private Dictionary<string, List<Transform>> objectsToExport = new Dictionary<string, List<Transform>>();
+
+    /// <summary>
+    /// Cache saved textures (using hash) so we don't save the same texture multiple times.
+    /// Key is hash (gen using GetPixels), value is file name.
+    /// </summary>
     private Dictionary<string, string> savedTextures = new Dictionary<string, string>();
 
-    // Assets/Export/(time)
+    /// <summary>
+    /// Directory to export to, relative to Assets directory, set in SetupFolders().
+    /// Default: Export/(time) -> Assets/Export/(time)
+    /// </summary>
     private string exportDir;
 
     /// <summary>
     /// Export current scene, scene must be fully loaded by Raymap first.
-    /// Exports the following: meshes, materials, textures, prefab.
+    /// Exports the following: meshes, materials, textures, prefab, lighting data.
     /// </summary>
     public void Export()
     {
@@ -36,21 +44,56 @@ public class PrefabExporter : MonoBehaviour
 
         SetupFolders();
 
-        // Static meshes only for now.
-        var world = GameObject.Find("Father Sector");
+        GameObject world;
 
-        var renderers = world.GetComponentsInChildren<Renderer>();
-        // Do not include collide submeshes.
-        var meshRenderers = renderers.Where(x => x.gameObject.name.StartsWith("Submesh")).ToList();
-        var meshFilters = meshRenderers.Select(x => x.gameObject.GetComponent<MeshFilter>());
+        if(UnitySettings.ExportStaticMeshesOnly)
+        {
+            // Only export static meshes (terrain).
+            world = GameObject.Find("Father Sector");
+        } else
+        {
+            // Also include dynamic objects (lums, enemies, etc).
+            world = GameObject.Find("Actual World");
+        } 
 
-        ExportMeshes(meshFilters);
-        ExportMaterials(meshRenderers);
-        ExportLightingData(meshRenderers, world);
+        // We only need the objects containing the mesh & material data.
+        var objects = world.GetComponentsInChildren<Transform>().Where(x => x.name.StartsWith("Submesh"));
 
-        RemoveRaymapScripts(world);
+        // Sort objects into object sets.
+        foreach (var obj in objects)
+        {
+            var objName = obj.name;
+            if(objectsToExport.ContainsKey(objName))
+            {
+                // Rename duplicates to avoid issues with restoring lighting.
+                obj.name = obj.name + "_" + objectsToExport[objName].Count;
+                objectsToExport[objName].Add(obj);
+            } else
+            {
+                objectsToExport.Add(objName, new List<Transform> {obj});
+            }
+        }
 
-        PrefabUtility.SaveAsPrefabAsset(world, "Assets/" + exportDir + "/Prefabs/world.prefab");
+        List<MeshLightingData> mld = new List<MeshLightingData>();
+
+        // Export data from each object set.
+        foreach (var pair in objectsToExport)
+        {
+            var objSet = pair.Value;
+
+            ExportMesh(objSet);
+            ExportMaterial(objSet);
+            mld.AddRange(ExportMeshLightingData(objSet));          
+        }
+
+        SaveLightingData(mld, world.transform);
+
+        if(UnitySettings.RemoveRaymapScripts)
+        {
+            RemoveRaymapScripts(world);
+        }
+
+        PrefabUtility.SaveAsPrefabAsset(world, "Assets/" + exportDir + "/Prefabs/" + UnitySettings.MapName + ".prefab");
         AssetDatabase.Refresh();
     }
 
@@ -75,65 +118,73 @@ public class PrefabExporter : MonoBehaviour
     }
 
     /// <summary>
-    /// Export all meshes in the mesh filters to the Meshes folder.
+    /// Export mesh of an object set to the Meshes folder.
     /// </summary>
-    /// <param name="filters">MeshFilters of all meshes in the scene.</param>
-    private void ExportMeshes(IEnumerable<MeshFilter> filters)
+    /// <param name="objSet">Object set to export.</param>
+    private void ExportMesh(List<Transform> objSet)
     {
-        foreach (var mf in filters)
-        {
-            var mesh = mf.mesh;
-            var saveName = GetMeshFriendlyName(mf.gameObject.name) + ".asset";
-            AssetDatabase.CreateAsset(mesh, "Assets/" + exportDir + "/Meshes/" + saveName);
-            AssetDatabase.Refresh();
+        var toExport = objSet.First();
 
-            // Fix collision
-            var mc = mf.GetComponent<MeshCollider>();
-            if(mc != null)
-            {
-                mc.sharedMesh = mesh;
-            }
+        var mf = toExport.GetComponent<MeshFilter>();
+        var mesh = mf.mesh;
+        var saveName = GetMeshFriendlyName(mf.name) + ".asset";
+        AssetDatabase.CreateAsset(mesh, "Assets/" + exportDir + "/Meshes/" + saveName);
+        AssetDatabase.Refresh();
+
+        // Set mesh & collider for all duplicates
+        foreach (var obj in objSet)
+        {
+            var filter = obj.GetComponent<MeshFilter>();
+            filter.mesh = mesh;
+            var col = GetComponent<MeshCollider>();
+            if(col != null) { col.sharedMesh = mesh; }
         }
     }
 
     /// <summary>
-    /// Export all materials in the (mesh) renderers to the Materials folder.
+    /// Export material of an object set to the Materials folder.
     /// </summary>
-    /// <param name="renderers">MeshRenderers of all meshes in the scene.</param>
-    private void ExportMaterials(IEnumerable<Renderer> renderers)
+    /// <param name="objSet">Object set to export.</param>
+    private void ExportMaterial(List<Transform> objSet)
     {
-        foreach (var mr in renderers)
+        var toExport = objSet.First();
+        
+        var mr = toExport.GetComponent<MeshRenderer>();
+        var material = new Material(mr.sharedMaterial);
+        ExportTextures(material);
+
+        var saveName = GetMeshFriendlyName(mr.gameObject.name) + ".mat";
+
+        AssetDatabase.CreateAsset(material, "Assets/" + exportDir + "/Materials/" + saveName);
+        AssetDatabase.Refresh();
+
+        // Set saved material on duplicates.
+        foreach (var obj in objSet)
         {
-            var material = new Material(mr.sharedMaterial);
-
-            ExportTextures(material);
-
-            var saveName = GetMeshFriendlyName(mr.gameObject.name) + ".mat";
-
-            AssetDatabase.CreateAsset(material, "Assets/" + exportDir + "/Materials/" + saveName);
-            AssetDatabase.Refresh();
-
-            mr.sharedMaterial = material;
+            obj.GetComponent<MeshRenderer>().sharedMaterial = material;
         }
     }
 
     /// <summary>
-    /// Export lighting data of each mesh.
+    /// Export lighting data of each object in an object set.
     /// Data is retrieved from the MaterialPropertyBlock of each renderer.
     /// </summary>
-    /// <param name="renderers">MeshRenderers of all meshes in the scene.</param>
-    private void ExportLightingData(IEnumerable<Renderer> renderers, GameObject world)
+    /// <param name="objSet">Objects to export.</param>
+    /// <returns>List of mesh lighting data.</returns>
+    private List<MeshLightingData> ExportMeshLightingData(List<Transform> objSet)
     {
         List<MeshLightingData> mld = new List<MeshLightingData>();
 
-        foreach (var mr in renderers)
+        foreach (var obj in objSet)
         {
             MeshLightingData data = new MeshLightingData();
-
-            data.objName = mr.gameObject.name;
+            var mr = obj.GetComponent<MeshRenderer>();
+          
+            data.objName = mr.name;
             var mpb = new MaterialPropertyBlock();
             mr.GetPropertyBlock(mpb);
 
+            // Lights data.
             data.staticLightCount = mpb.GetFloat("_StaticLightCount");
 
             if (data.staticLightCount > 0)
@@ -149,26 +200,45 @@ public class PrefabExporter : MonoBehaviour
                 data.staticLightParams.staticLightParams = mpb.GetVectorArray("_StaticLightParams");
             }
 
+            // Fog data.
             data.sectorFog = mpb.GetVector("_SectorFog");
             data.sectorFogParams = mpb.GetVector("_SectorFogParams");
-                
+
             mld.Add(data);
         }
-        
+
+        return mld;
+    }
+
+    /// <summary>
+    /// Saves the lighting data to a ScriptableObject and JSON.
+    /// Also adds a script to the world object to restore lighting at runtime and in editor.
+    /// </summary>
+    /// <param name="mld">Lighting data of all meshes.</param>
+    /// <param name="world">World root object.</param>
+    private void SaveLightingData(List<MeshLightingData> mld, Transform world)
+    {
         var lightingData = ScriptableObject.CreateInstance<LightingData>();
-        
+
         lightingData.luminosity = Shader.GetGlobalFloat("_Luminosity");
         lightingData.saturate = Shader.GetGlobalFloat("_Saturate");
         lightingData.meshLightingData = mld;
 
+        // Save ScriptableObject.
         AssetDatabase.CreateAsset(lightingData, "Assets/" + exportDir + "/Prefabs/" + "Lighting.asset");
         AssetDatabase.Refresh();
 
         var ldo = new GameObject("LightingData");
         ldo.transform.parent = world.transform;
 
+        // Script for restoring lighting.
         var ldscript = ldo.AddComponent<RestoreLighting>();
         ldscript.lightingData = lightingData;
+
+        // Also save to JSON.
+        var jsonPath = Application.dataPath + "/" + exportDir + "/Prefabs/Lighting.json";
+        var json = JsonUtility.ToJson(lightingData);
+        File.WriteAllText(jsonPath, json);
     }
 
     /// <summary>
