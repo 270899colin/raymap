@@ -9,6 +9,7 @@ using UnityEngine;
 public class MeshLightingData
 {
     public string objName;
+    public bool skinned;
     public float staticLightCount;
     // Need container objects to be serializable.
     public StaticLightPos staticLightPos;

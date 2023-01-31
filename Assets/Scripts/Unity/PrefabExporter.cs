@@ -124,20 +124,38 @@ public class PrefabExporter : MonoBehaviour
     private void ExportMesh(List<Transform> objSet)
     {
         var toExport = objSet.First();
+        var isSkinnedMesh = IsSkinnedMesh(toExport);
 
-        var mf = toExport.GetComponent<MeshFilter>();
-        var mesh = mf.mesh;
-        var saveName = GetMeshFriendlyName(mf.name) + ".asset";
+        Mesh mesh;
+
+        if(!isSkinnedMesh)
+        {
+            var mf = toExport.GetComponent<MeshFilter>();
+            mesh = mf.mesh;
+        } else
+        {
+            var smr = toExport.GetComponent<SkinnedMeshRenderer>();
+            mesh = smr.sharedMesh;
+        }
+
+        var saveName = GetMeshFriendlyName(toExport.name) + ".asset";
         AssetDatabase.CreateAsset(mesh, "Assets/" + exportDir + "/Meshes/" + saveName);
         AssetDatabase.Refresh();
 
         // Set mesh & collider for all duplicates
         foreach (var obj in objSet)
         {
-            var filter = obj.GetComponent<MeshFilter>();
-            filter.mesh = mesh;
-            var col = GetComponent<MeshCollider>();
-            if(col != null) { col.sharedMesh = mesh; }
+            if(!isSkinnedMesh)
+            {
+                var filter = obj.GetComponent<MeshFilter>();
+                filter.mesh = mesh;
+                var col = GetComponent<MeshCollider>();
+                if (col != null) { col.sharedMesh = mesh; }
+            } else
+            {
+                var smr = obj.GetComponent<SkinnedMeshRenderer>();
+                smr.sharedMesh = mesh;
+            }           
         }
     }
 
@@ -148,12 +166,22 @@ public class PrefabExporter : MonoBehaviour
     private void ExportMaterial(List<Transform> objSet)
     {
         var toExport = objSet.First();
-        
-        var mr = toExport.GetComponent<MeshRenderer>();
-        var material = new Material(mr.sharedMaterial);
+        var isSkinnedMesh = IsSkinnedMesh(toExport);
+
+        Material material;
+        if (!isSkinnedMesh)
+        {
+            var mr = toExport.GetComponent<MeshRenderer>();
+            material = new Material(mr.sharedMaterial);
+        } else
+        {
+            var smr = toExport.GetComponent<SkinnedMeshRenderer>();
+            material = new Material(smr.sharedMaterial);
+        }
+
         ExportTextures(material);
 
-        var saveName = GetMeshFriendlyName(mr.gameObject.name) + ".mat";
+        var saveName = GetMeshFriendlyName(toExport.name) + ".mat";
 
         AssetDatabase.CreateAsset(material, "Assets/" + exportDir + "/Materials/" + saveName);
         AssetDatabase.Refresh();
@@ -161,7 +189,13 @@ public class PrefabExporter : MonoBehaviour
         // Set saved material on duplicates.
         foreach (var obj in objSet)
         {
-            obj.GetComponent<MeshRenderer>().sharedMaterial = material;
+            if(!isSkinnedMesh)
+            {
+                obj.GetComponent<MeshRenderer>().sharedMaterial = material;
+            } else
+            {
+                obj.GetComponent<SkinnedMeshRenderer>().sharedMaterial = material;
+            }          
         }
     }
 
@@ -175,15 +209,27 @@ public class PrefabExporter : MonoBehaviour
     {
         List<MeshLightingData> mld = new List<MeshLightingData>();
 
+        var isSkinnedMesh = IsSkinnedMesh(objSet.First());
+
         foreach (var obj in objSet)
         {
             MeshLightingData data = new MeshLightingData();
-            var mr = obj.GetComponent<MeshRenderer>();
-          
-            data.objName = mr.name;
-            var mpb = new MaterialPropertyBlock();
-            mr.GetPropertyBlock(mpb);
 
+            data.objName = obj.name;
+            data.skinned = isSkinnedMesh;
+
+            var mpb = new MaterialPropertyBlock();
+
+            if (!isSkinnedMesh)
+            {
+                var mr = obj.GetComponent<MeshRenderer>();
+                mr.GetPropertyBlock(mpb);
+            } else
+            {
+                var smr = obj.GetComponent<SkinnedMeshRenderer>();
+                smr.GetPropertyBlock(mpb);
+            }
+                   
             // Lights data.
             data.staticLightCount = mpb.GetFloat("_StaticLightCount");
 
@@ -358,5 +404,15 @@ public class PrefabExporter : MonoBehaviour
     private string GetMeshFriendlyName(string objName)
     {
         return objName.Substring(objName.LastIndexOf('|') + 1);
+    }
+
+    /// <summary>
+    /// Checks if an object has a skinned mesh renderer.
+    /// </summary>
+    /// <param name="obj">Object to check.</param>
+    /// <returns>True if skinned mesh renderer is present.</returns>
+    private bool IsSkinnedMesh(Transform obj)
+    {
+        return obj.GetComponent<SkinnedMeshRenderer>() != null;
     }
 }

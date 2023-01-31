@@ -31,11 +31,19 @@ public class RestoreLighting : MonoBehaviour
             var obj = GameObject.Find(mld.objName);
             if(obj != null)
             {
-                var mr = obj.GetComponent<MeshRenderer>();
-
                 MaterialPropertyBlock mpb = new MaterialPropertyBlock();
-                mr.GetPropertyBlock(mpb);
 
+                Renderer renderer;
+                if(!mld.skinned)
+                {
+                    renderer = obj.GetComponent<MeshRenderer>();
+                } else
+                {
+                    renderer = obj.GetComponent<SkinnedMeshRenderer>();
+                }
+
+                renderer.GetPropertyBlock(mpb);
+                               
                 mpb.SetFloat("_StaticLightCount", mld.staticLightCount);
                 if(mld.staticLightCount > 0)
                 {
@@ -48,7 +56,7 @@ public class RestoreLighting : MonoBehaviour
                 mpb.SetVector("_SectorFog", mld.sectorFog);
                 mpb.SetVector("_SectorFogParams", mld.sectorFogParams);
 
-                mr.SetPropertyBlock(mpb);
+                renderer.SetPropertyBlock(mpb);
             } else
             {
                 Debug.LogWarning("Object not found, unable to restore ligthing: " + mld.objName);
