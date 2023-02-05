@@ -57,7 +57,12 @@ public class PrefabExporter : MonoBehaviour
         } 
 
         // We only need the objects containing the mesh & material data.
-        var objects = world.GetComponentsInChildren<Transform>().Where(x => x.name.StartsWith("Submesh"));
+        var objects = world.GetComponentsInChildren<Transform>().Where(x => x.name.StartsWith("Submesh")).ToList();
+
+        // Also add sprites, we search for MeshRenderers here first since not every object labeled sprite has components attached.
+        // Note: Not all sprites render correctly after export, changing the texture wrap to mirrored usually fixes it.
+        var sprites = world.GetComponentsInChildren<MeshRenderer>().Where(x => x.name.StartsWith("Sprite")).ToList();
+        sprites.ForEach(x => objects.Add(x.GetComponent<Transform>()));
 
         // Sort objects into object sets.
         foreach (var obj in objects)
@@ -322,33 +327,40 @@ public class PrefabExporter : MonoBehaviour
 
         foreach (var texture in textures)
         {
-            var tx = (Texture2D)texture.Value;
-
-            // tx.imageContentsHash is null so can't be used here.
-            // Not great performance, but should be fine with Rayman's small texture size.
-            var hash = new Hash128();
-            hash.Append(tx.GetPixels());
-
-            string fileName;
-
-            if (!savedTextures.ContainsKey(hash.ToString()))
+            try
             {
-                // Save texture
-                fileName = "Texture" + savedTextures.Count() + ".png";
-                var savePath = Application.dataPath + "/" + exportDir + "/Textures/" + fileName;
-                byte[] bytes = tx.EncodeToPNG();
-                // AssetDatabase.CreateAsset can't be used for textures.
-                File.WriteAllBytes(savePath, bytes);
-                AssetDatabase.Refresh();
-                savedTextures.Add(hash.ToString(), fileName);
-            } else
+                var tx = (Texture2D)texture.Value;
+
+                // tx.imageContentsHash is null so can't be used here.
+                // Not great performance, but should be fine with Rayman's small texture size.
+                var hash = new Hash128();
+                hash.Append(tx.GetPixels());
+
+                string fileName;
+
+                if (!savedTextures.ContainsKey(hash.ToString()))
+                {
+                    // Save texture
+                    fileName = "Texture" + savedTextures.Count() + ".png";
+                    var savePath = Application.dataPath + "/" + exportDir + "/Textures/" + fileName;
+                    byte[] bytes = tx.EncodeToPNG();
+                    // AssetDatabase.CreateAsset can't be used for textures.
+                    File.WriteAllBytes(savePath, bytes);
+                    AssetDatabase.Refresh();
+                    savedTextures.Add(hash.ToString(), fileName);
+                }
+                else
+                {
+                    // Texture already saved, use saved texture.
+                    fileName = savedTextures[hash.ToString()];
+                }
+                // Assign exported texture to mat.
+                var savedTexture = (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/" + exportDir + "/Textures/" + fileName, typeof(Texture2D));
+                mat.SetTexture(texture.Key, savedTexture);
+            } catch(InvalidCastException)
             {
-                // Texture already saved, use saved texture.
-                fileName = savedTextures[hash.ToString()];
+                Debug.LogWarning("[PrefabExporter] Invalid texture, skipping. " + mat.name);
             }
-            // Assign exported texture to mat.
-            var savedTexture = (Texture2D)AssetDatabase.LoadAssetAtPath("Assets/" + exportDir + "/Textures/" + fileName, typeof(Texture2D));
-            mat.SetTexture(texture.Key, savedTexture);
         }
     }
 
