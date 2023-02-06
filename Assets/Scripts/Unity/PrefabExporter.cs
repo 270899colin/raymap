@@ -154,7 +154,7 @@ public class PrefabExporter : MonoBehaviour
             {
                 var filter = obj.GetComponent<MeshFilter>();
                 filter.mesh = mesh;
-                var col = GetComponent<MeshCollider>();
+                var col = obj.GetComponent<MeshCollider>();
                 if (col != null) { col.sharedMesh = mesh; }
             } else
             {
